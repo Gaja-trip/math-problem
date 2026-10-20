@@ -1,2 +1,9 @@
-# math-problem
-solution-math
+# 생각수학 · 수학경시대회 학습 앱
+
+개념 이해, 문제 풀이, 오답 복습, HME 기출 PDF 등록, 맞춤 학습지 PDF 다운로드와 인쇄를 지원합니다.
+
+HME 공식 문제지·풀이지 407쌍과 정답표 대조가 완료된 온라인 문항 4,748개를 연결했습니다. 확인되지 않은 답은 자동 채점하지 않으며 원문 학습으로 제공합니다.
+
+앱은 `sites/think-math/`에 있습니다. 먼저 `server-runtime/` 폴더에서 `npm ci`로 의존성을 설치한 뒤, 앱 폴더에서 `npm run dev`를 실행하고 `http://127.0.0.1:4173/learning/index.html`을 여세요.
+
+자세한 기능과 원본 자료의 수록 범위는 [앱 안내](sites/think-math/README.md)를 확인하세요.
