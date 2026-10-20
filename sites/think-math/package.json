@@ -1,0 +1,12 @@
+{
+  "name": "saenggak-math",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-server.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "start": "node scripts/dev-server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check dist/app.js && node --check dist/data.js && node --check dist/pdf.js && node --check dist/storage.js && node --check dist/hme.js && node --check dist/answer-checker.js && node --check dist/source-integrity.js && node --check dist/paper-study.js && node --check dist/paper-model.js"
+  }
+}

@@ -1,0 +1,14 @@
+# Local tools and generated archives do not belong in the GitHub source tree.
+node_modules/
+.sites-*
+.wrangler/
+.vinext/
+*.tar.gz
+/output/
+/tmp/
+
+# Keep local credentials and environment overrides out of commits.
+.env
+.env.*
+!.env.example
+!.env.*.example

@@ -1,0 +1,16 @@
+.sites-*
+*.tar.gz
+node_modules/
+output/
+tmp/
+server-runtime/node_modules/
+server-runtime/.sites-runtime/
+server-runtime/.wrangler/
+server-runtime/.vinext/
+server-runtime/dist/
+server-runtime/public/learning/
+server-runtime/sources.json
+server-runtime/bundled-sources.json
+dist/server/
+dist/client/
+dist/.openai/

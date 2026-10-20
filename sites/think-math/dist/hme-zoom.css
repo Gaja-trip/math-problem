@@ -1,0 +1,7 @@
+.source-scroll canvas{max-width:none}
+.study-layout>*,.hme-pair-grid>*,.question-panel,.study-side{min-width:0}
+.source-viewer,.source-scroll{min-width:0;max-width:100%}
+@media(max-width:1000px){.study-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:480px){.question-panel .answer-form{flex-wrap:wrap}.question-panel .answer-form input{min-width:0;flex:1 1 170px}.question-panel .answer-form .btn{flex:1 1 100%}}
+.source-zoom{display:flex;align-items:center;gap:9px;justify-content:flex-end;font-size:10px;color:#809173;padding:5px 10px;background:#f7faf2;border-top:1px solid #e1e7da}
+.source-zoom button{border:1px solid #dfe6d7;border-radius:5px;background:white;min-height:32px;min-width:34px;font-size:16px}
