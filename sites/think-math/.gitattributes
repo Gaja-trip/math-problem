@@ -1,1 +1,3 @@
 *.pdf -text
+*.webp binary
+*.tar binary

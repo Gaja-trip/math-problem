@@ -1,0 +1,10 @@
+{
+  "name": "think-math-workspace",
+  "private": true,
+  "scripts": {
+    "build": "node sites/think-math/scripts/build-static.mjs",
+    "test": "npm --prefix sites/think-math test",
+    "check": "npm --prefix sites/think-math run check"
+  },
+  "engines": {"node": "22.x"}
+}

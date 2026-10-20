@@ -54,12 +54,12 @@ test('every downloaded official source has its exact verified digest',async()=>{
   const korean=Object.keys(sources).find(f=>/[가-힣]/.test(f));assert(korean);assert.equal((await serveHmeSource(new Request('https://test/api/hme/'+encodeURIComponent(korean)),korean,sources)).status,307);
 });
 test('all online questions have bundled problem and solution files',async()=>{
-  const {default:bundled}=await import('../dist/hme/bundled-sources.js');
+  const {default:bundled}=await import('../web-dist/learning/hme/bundled-sources.js');
   for(const paper of catalog.papers)if(paper.onlineCount>0){assert.equal(bundled[paper.paper],paper.paperSha256);assert.equal(bundled[paper.solution],paper.solutionSha256);}
-  assert.equal(Object.keys(bundled).length,380);
-  const filename=Object.keys(sources).find(f=>!Object.hasOwn(bundled,f));const response=await serveHmeSource(new Request('https://test/api/hme/'+encodeURIComponent(filename)),filename,sources,bundled);assert.equal(new URL(response.headers.get('location')).origin,'https://hme.chunjae.co.kr');
+  assert.equal(Object.keys(bundled).length,814);
+  for(const [filename,hash] of Object.entries(sources))assert.equal(bundled[filename],hash);
 });
 test('every compressed online PDF restores the exact official original',async()=>{
-  const {default:bundled}=await import('../dist/hme/bundled-sources.js');
-  for(const hash of new Set(Object.values(bundled))){const encoded=fs.readFileSync(new URL(`../server-runtime/public/learning/hme/files/${hash}.pdf.gz`,import.meta.url));await decodeHmeSource(encoded,hash);}
+  const {default:bundled}=await import('../web-dist/learning/hme/bundled-sources.js');
+  for(const hash of new Set(Object.values(bundled))){const encoded=fs.readFileSync(new URL(`../web-dist/learning/hme/files/${hash}.pdf.gz`,import.meta.url));await decodeHmeSource(encoded,hash);}
 });

@@ -14,3 +14,5 @@ server-runtime/bundled-sources.json
 dist/server/
 dist/client/
 dist/.openai/
+web-dist/
+assets/hme/media/

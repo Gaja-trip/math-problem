@@ -1,12 +1,12 @@
 import {GRADES,gradeLabel} from './data.js';
-import {currentCatalog,getCachedHmePaper,getHmePdf,drawHmePage,hmeQuestionRaster,hmeQuestionLayout} from './hme.js?v=paper5';
-import {gradePaper,restorePaperWork,paperRevision,isSameSubmission} from './paper-model.js?v=paper5';
+import {currentCatalog,getCachedHmePaper,getLocalDocument,drawHmePage,hmeQuestionRaster,hmeQuestionLayout} from './hme.js?v=local6';
+import {gradePaper,restorePaperWork,paperRevision,isSameSubmission} from './paper-model.js?v=local6';
 
 const e=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const link=(href,label,cls='secondary')=>`<a class="btn ${cls}" href="#${href}">${label}</a>`;
 const title=p=>`${p.year}년 ${p.semester} · ${gradeLabel(p.grade)}`;
 export function createPaperStudy(config){
-  let sequence=0,observer,saveTimer,queue=Promise.resolve(),activeId='',sourceReady=false,zoom=1;
+  let sequence=0,observer,saveTimer,activeId='',sourceReady=false,zoom=1;
   const rasters=new Map();
   const state=()=>config.state();
   function work(p){state().paperWork??={};return state().paperWork[p.id]??=restorePaperWork(p);}
@@ -41,20 +41,20 @@ export function createPaperStudy(config){
   function updateProgress(p){const w=work(p),answered=p.questions.filter(q=>w.answers[q.id].trim()).length;const label=document.querySelector('[data-paper-progress]');if(label)label.textContent=`${answered} / ${p.questions.length}문항 입력`;for(const b of document.querySelectorAll('[data-question-id]'))b.classList.toggle('filled',!!w.answers[b.dataset.questionId]?.trim());}
   function dispose(){sequence++;observer?.disconnect();observer=null;activeId='';sourceReady=false;clearTimeout(saveTimer);config.save();}
   async function mount(id){
-    observer?.disconnect();const seq=++sequence;activeId=id;sourceReady=false;
+    observer?.disconnect();const seq=++sequence;let assetFailed=false;activeId=id;sourceReady=false;
     const p=getCachedHmePaper(id)||currentCatalog()?.papers.find(x=>x.id===id);if(!p)return;
     const targets=[...document.querySelectorAll('[data-paper-raster],[data-paper-pdf]')];
-    await Promise.all(targets.filter(t=>t.dataset.paperPdf).map(async target=>{try{const doc=await getHmePdf(target.dataset.paperPdf),page=await doc.getPage(Number(target.dataset.page)),view=page.getViewport({scale:1});if(seq!==sequence||!target.isConnected)return;const css=getComputedStyle(target.parentElement),fit=Math.max(280,target.parentElement.clientWidth-(parseFloat(css.paddingLeft)||0)-(parseFloat(css.paddingRight)||0));target.width=Math.ceil(view.width);target.height=Math.ceil(view.height);target.style.width=fit*zoom+'px';}catch{}}));
+    await Promise.all(targets.filter(t=>t.dataset.paperPdf).map(async target=>{try{const doc=await getLocalDocument(target.dataset.paperPdf),page=doc.pages[Number(target.dataset.page)-1];if(seq!==sequence||!target.isConnected)return;const css=getComputedStyle(target.parentElement),fit=Math.max(280,target.parentElement.clientWidth-(parseFloat(css.paddingLeft)||0)-(parseFloat(css.paddingRight)||0));target.width=page.width;target.height=page.height;target.style.width=fit*zoom+'px';}catch{}}));
     if(seq!==sequence)return;document.querySelectorAll('[data-paper-page-jump]').forEach(b=>b.disabled=false);
-    const renderTarget=target=>{queue=queue.catch(()=>{}).then(async()=>{
+    const renderTarget=async target=>{
       if(seq!==sequence||!target.isConnected)return;
       try{if(target.dataset.paperRaster){const q=p.questions.find(x=>x.id===target.dataset.paperRaster);if(!rasters.has(q.id)){rasters.set(q.id,hmeQuestionRaster(q));if(rasters.size>40)rasters.delete(rasters.keys().next().value);}const raster=await rasters.get(q.id);if(seq!==sequence||!target.isConnected)return;target.innerHTML=`${raster.shared?`<p class="paper-shared-note">공통 지문·도형이 있는 원본 페이지입니다. ${q.number}번을 풀어 주세요.</p>`:''}<img src="${raster.data}" width="${raster.width}" height="${raster.height}" alt="공식 ${q.number}번 문제${raster.shared?'와 공통 지문·도형':''}">`;}
       else{await drawHmePage(target,target.dataset.paperPdf,Number(target.dataset.page),{zoom});if(seq===sequence&&target.isConnected)target.nextElementSibling?.remove();}}
-      catch{if(seq!==sequence||!target.isConnected)return;const note=target.dataset.paperRaster?target:target.nextElementSibling;if(note){note.className='source-error';note.textContent='원문을 불러오지 못했어요. 다시 열어 확인해 주세요.';}rasters.delete(target.dataset.paperRaster);}
-    });};
+      catch{if(seq!==sequence||!target.isConnected)return;const note=target.dataset.paperRaster?target:target.nextElementSibling;if(note){note.className='source-error';note.textContent='원문을 불러오지 못했어요. 다시 열어 확인해 주세요.';}rasters.delete(target.dataset.paperRaster);if(target.dataset.paperRaster){assetFailed=true;sourceReady=false;document.querySelectorAll('[data-paper-submit]').forEach(b=>b.disabled=true);const label=document.querySelector('[data-paper-source-status]');if(label)label.textContent='문제 이미지를 확인하지 못했어요. 다시 열어 주세요.';}}
+    };
     observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){observer?.unobserve(entry.target);renderTarget(entry.target);}},{rootMargin:'500px 0px'});targets.forEach(t=>observer.observe(t));
     if(document.querySelector('#paper-answer-form')){
-      try{await Promise.all([getHmePdf(p.paper),getHmePdf(p.solution)]);await Promise.all(p.questions.map(async q=>{const layout=await hmeQuestionLayout(q);if(seq!==sequence)return;const element=document.querySelector('[data-paper-raster="'+q.id+'"]');if(element)element.style.aspectRatio=String(layout.ratio);}));if(seq!==sequence)return;sourceReady=true;document.querySelectorAll('[data-paper-submit]').forEach(b=>b.removeAttribute('disabled'));const label=document.querySelector('[data-paper-source-status]');if(label)label.textContent='공식 문제지·풀이지 확인 완료';}
+      try{await Promise.all([getLocalDocument(p.paper),getLocalDocument(p.solution)]);await Promise.all(p.questions.map(async q=>{const layout=await hmeQuestionLayout(q);if(seq!==sequence)return;const element=document.querySelector('[data-paper-raster="'+q.id+'"]');if(element)element.style.aspectRatio=String(layout.ratio);}));await hmeQuestionRaster(p.questions[0]);if(seq!==sequence)return;if(assetFailed)throw new Error('문제 이미지 확인 실패');sourceReady=true;document.querySelectorAll('[data-paper-submit]').forEach(b=>b.removeAttribute('disabled'));const label=document.querySelector('[data-paper-source-status]');if(label)label.textContent='저장된 공식 문제·정답 대조 완료';}
       catch{if(seq!==sequence)return;const label=document.querySelector('[data-paper-source-status]');if(label)label.textContent='공식 원본을 확인하지 못해 제출을 잠시 중단했어요. 다시 열어 주세요.';}
     }
   }

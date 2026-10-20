@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "node --version",
+  "buildCommand": "node scripts/build-static.mjs",
+  "outputDirectory": "web-dist",
+  "redirects": [{"source": "/", "destination": "/learning/", "permanent": false}],
+  "headers": [
+    {"source": "/learning/hme/media/:path*", "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000, immutable"}, {"key": "Access-Control-Allow-Origin", "value": "*"}]},
+    {"source": "/learning/hme/files/:path*", "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000, immutable"}, {"key": "Access-Control-Allow-Origin", "value": "*"}]},
+    {"source": "/learning/:path*", "headers": [{"key": "X-Content-Type-Options", "value": "nosniff"}]}
+  ]
+}

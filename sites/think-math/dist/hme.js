@@ -1,69 +1,50 @@
 import sourceHashes from './hme/source-map.js';
 import bundledSources from './hme/bundled-sources.js';
 import {decodeHmeSource} from './source-integrity.js';
+import {getLocalDocument,getLocalRaster,getLocalQuestion,studyAssetBase} from './local-media.js?v=local6';
+export {getLocalDocument} from './local-media.js?v=local6';
 const base=new URL('./',import.meta.url);
-let catalog=null;
-const papers=new Map(),pdfs=new Map();
-let library;
-const sharedPageRanges=new Map();
-export async function loadHmeCatalog(){if(!catalog){const r=await fetch(new URL('hme/catalog.json',base));if(!r.ok)throw new Error('기출 목록을 불러오지 못했습니다.');catalog=await r.json();}return catalog;}
+let catalog=null,catalogPromise;
+const papers=new Map(),pendingPapers=new Map(),bytesCache=new Map();
+export async function loadHmeCatalog(){
+  if(!catalogPromise)catalogPromise=(async()=>{const r=await fetch(new URL('hme/catalog.json',base));if(!r.ok)throw new Error('기출 목록을 불러오지 못했습니다.');return catalog=await r.json();})().catch(error=>{catalogPromise=null;throw error;});
+  return catalogPromise;
+}
 export function currentCatalog(){return catalog;}
 export function cachedHmeQuestions(){return [...papers.values()].flatMap(p=>p.questions||[]);}
 export async function loadHmePaper(id){
   if(!/^hme-\d+-[1-9]$/.test(id))throw new Error('잘못된 기출 회차입니다.');
-  if(!papers.has(id)){const r=await fetch(new URL(`hme/papers/${id}.json`,base));if(!r.ok)throw new Error('기출 자료를 찾지 못했습니다.');papers.set(id,await r.json());}
-  return papers.get(id);
+  if(papers.has(id))return papers.get(id);
+  if(!pendingPapers.has(id))pendingPapers.set(id,(async()=>{const summary=catalog?.papers.find(p=>p.id===id);const metadata=(async()=>{const r=await fetch(new URL(`hme/papers/${id}.json?v=local6`,base),{cache:'force-cache'});if(!r.ok)throw new Error('기출 자료를 찾지 못했습니다.');return r.json();})();const documents=summary?Promise.all([getLocalDocument(summary.paper),getLocalDocument(summary.solution)]):metadata.then(p=>Promise.all([getLocalDocument(p.paper),getLocalDocument(p.solution)]));const [paper,[problem,solution]]=await Promise.all([metadata,documents]);if(summary&&(summary.paper!==paper.paper||summary.solution!==paper.solution))throw new Error('기출 목록을 새로 열어 주세요.');paper.paperPages=problem.pages.length;paper.solutionPages=solution.pages.length;papers.set(id,paper);return paper;})().finally(()=>pendingPapers.delete(id)));
+  return pendingPapers.get(id);
 }
 export function getCachedHmePaper(id){return papers.get(id);}
 export function hmeSourceUrl(filename){if(!Object.hasOwn(sourceHashes,filename))throw new Error('등록되지 않은 공식 자료입니다.');return 'https://hme.chunjae.co.kr/webdata/HME/TestPaperData/'+encodeURIComponent(filename);}
 export async function getHmeBytes(filename){
-  if(!Object.hasOwn(bundledSources,filename))throw new Error('이 자료는 HME 공식 사이트에서 확인해 주세요.');
-  const response=await fetch(new URL(`hme/files/${sourceHashes[filename]}.pdf.gz`,base),{signal:AbortSignal.timeout(45000)});
-  if(!response.ok)throw new Error('공식 원본을 불러오지 못했습니다.');
-  return decodeHmeSource(await response.arrayBuffer(),sourceHashes[filename]);
-}
-export async function getHmePdf(filename){
-  if(!pdfs.has(filename)){
-    if(!library)library=import('./vendor/pdfjs/pdf.min.mjs');
-    const promise=(async()=>{const pdfjs=await library;pdfjs.GlobalWorkerOptions.workerSrc=new URL('vendor/pdfjs/pdf.worker.min.mjs',base).href;
-      const data=await getHmeBytes(filename);
-      return pdfjs.getDocument({data,cMapUrl:new URL('vendor/pdfjs/cmaps/',base).href,cMapPacked:true,standardFontDataUrl:new URL('vendor/pdfjs/standard_fonts/',base).href,wasmUrl:new URL('vendor/pdfjs/wasm/',base).href,isEvalSupported:false,enableXfa:false,disableRange:true}).promise;})();
-    pdfs.set(filename,promise);
-    promise.catch(()=>pdfs.delete(filename));
-    if(pdfs.size>4){const [old,doc]=pdfs.entries().next().value;pdfs.delete(old);doc.then(p=>p.destroy()).catch(()=>{});}
+  if(!Object.hasOwn(bundledSources,filename))throw new Error('이 배포에는 원본 PDF가 포함되어 있지 않습니다.');
+  if(!bytesCache.has(filename)){
+    const promise=(async()=>{const response=await fetch(new URL(`hme/files/${sourceHashes[filename]}.pdf.gz`,studyAssetBase),{cache:'force-cache',signal:AbortSignal.timeout(45000)});if(!response.ok)throw new Error('저장된 원본을 불러오지 못했습니다.');return decodeHmeSource(await response.arrayBuffer(),sourceHashes[filename]);})();
+    bytesCache.set(filename,promise);promise.catch(()=>bytesCache.delete(filename));if(bytesCache.size>4)bytesCache.delete(bytesCache.keys().next().value);
   }
-  return pdfs.get(filename);
+  return bytesCache.get(filename);
 }
 export async function drawHmePage(canvas,filename,pageNumber,{clip=null,highlight=null,width=null,sourceHeight=null,zoom=1}={}){
-  const doc=await getHmePdf(filename);const page=await doc.getPage(Math.min(Math.max(1,pageNumber),doc.numPages));
-  const original=page.getViewport({scale:1});
+  const doc=await getLocalDocument(filename),number=Math.min(Math.max(1,pageNumber),doc.pages.length),record=doc.pages[number-1];
+  const raster=await getLocalRaster(filename,record),image=new Image();image.src=raster.data;await image.decode();
+  const [left,bottom,right,top]=record.bounds,originalWidth=right-left,originalHeight=top-bottom;
   const parent=canvas.parentElement,style=parent?getComputedStyle(parent):null;
   const available=parent?parent.clientWidth-(parseFloat(style.paddingLeft)||0)-(parseFloat(style.paddingRight)||0):620;
   const target=(width||Math.max(280,available||620))*zoom;
-  const offsetX=sourceHeight?page.view[0]:0,offsetY=sourceHeight?sourceHeight-page.view[3]:0;
+  const offsetX=sourceHeight?left:0,offsetY=sourceHeight?sourceHeight-top:0;
   const convert=box=>[box[0]-offsetX,box[1]-offsetY,box[2]-offsetX,box[3]-offsetY];
-  const region=clip?convert(clip):[0,0,original.width,original.height];
-  if(highlight)highlight=convert(highlight);
-  const scale=target/(region[2]-region[0]);
-  const pixelRatio=width?1:Math.min(devicePixelRatio||1,2);
-  const viewport=page.getViewport({scale:scale*pixelRatio});
-  canvas.width=Math.ceil((region[2]-region[0])*scale*pixelRatio);canvas.height=Math.ceil((region[3]-region[1])*scale*pixelRatio);
-  canvas.style.width=target+'px';canvas.style.height=canvas.height/pixelRatio+'px';
-  const transform=[1,0,0,1,-region[0]*scale*pixelRatio,-region[1]*scale*pixelRatio];
-  await page.render({canvasContext:canvas.getContext('2d'),viewport,transform}).promise;
-  if(highlight){const ctx=canvas.getContext('2d');ctx.strokeStyle='#5c9561';ctx.lineWidth=2*pixelRatio;ctx.strokeRect(highlight[0]*scale*pixelRatio,highlight[1]*scale*pixelRatio,(highlight[2]-highlight[0])*scale*pixelRatio,(highlight[3]-highlight[1])*scale*pixelRatio);}
-  return {pages:doc.numPages,page:pageNumber};
+  const region=clip?convert(clip):[0,0,originalWidth,originalHeight];
+  const ratio=width?1:Math.min(devicePixelRatio||1,2),scale=target/(region[2]-region[0]);
+  canvas.width=Math.ceil(target*ratio);canvas.height=Math.ceil((region[3]-region[1])*scale*ratio);
+  canvas.style.width=target+'px';canvas.style.height=canvas.height/ratio+'px';
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(image,region[0]*image.width/originalWidth,region[1]*image.height/originalHeight,(region[2]-region[0])*image.width/originalWidth,(region[3]-region[1])*image.height/originalHeight,0,0,canvas.width,canvas.height);
+  if(highlight){const box=convert(highlight);ctx.strokeStyle='#5c9561';ctx.lineWidth=2*ratio;ctx.strokeRect(box[0]*scale*ratio,box[1]*scale*ratio,(box[2]-box[0])*scale*ratio,(box[3]-box[1])*scale*ratio);}
+  return {pages:doc.pages.length,page:number};
 }
-export async function hmeQuestionRaster(question){
-  const doc=await getHmePdf(question.paper);const page=await doc.getPage(question.paperPage);
-  const {shared}=await hmeQuestionLayout(question);
-  const canvas=document.createElement('canvas');
-  await drawHmePage(canvas,question.paper,question.paperPage,{clip:shared?null:question.paperClip,width:1000,sourceHeight:question.paperDimensions?.[1]});
-  return {data:canvas.toDataURL('image/jpeg',.94),width:canvas.width,height:canvas.height,shared};
-}
-export async function hmeQuestionLayout(question){
-  const key=question.paper+':'+question.paperPage;
-  if(!sharedPageRanges.has(key))sharedPageRanges.set(key,(async()=>{const doc=await getHmePdf(question.paper),page=await doc.getPage(question.paperPage),content=await page.getTextContent();return [...content.items.map(v=>v.str||'').join(' ').matchAll(/\[\s*(\d{1,2})\s*[~∼～]\s*(\d{1,2})\s*\]/g)].map(m=>[Number(m[1]),Number(m[2])]);})());
-  const groups=await sharedPageRanges.get(key),shared=groups.some(([first,last])=>question.number>=first&&question.number<=last);
-  return {shared,ratio:shared?(question.paperDimensions?.[0]||600)/(question.paperDimensions?.[1]||850):(question.paperClip[2]-question.paperClip[0])/(question.paperClip[3]-question.paperClip[1])};
-}
+export async function hmeQuestionRaster(question){return getLocalRaster(question.paper,await getLocalQuestion(question));}
+export async function hmeQuestionLayout(question){const record=await getLocalQuestion(question);return {shared:record.shared,ratio:record.width/record.height};}
